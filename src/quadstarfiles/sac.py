@@ -61,11 +61,9 @@ def _rec_to_dict(rec: np.ndarray) -> dict:
     """Converts a numpy record array to a dictionary."""
     dtype = rec.dtype
     keys = rfn.get_names(dtype)
-    # NOTE: If it's stupid but it works, is it really stupid?
-    try:
+    if all(isinstance(rec[key], list) for key in keys):
         return {key: rec[key][0] for key in keys}
-    except IndexError:
-        return {key: rec[key] for key in keys}
+    return {key: rec[key] for key in keys}
 
 
 def _read_value(data: bytes, offset: int, dtype) -> Any:
