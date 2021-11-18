@@ -34,7 +34,7 @@ def _construct_path(other_path: str, ext: str) -> str:
     """
     head, tail = os.path.split(other_path)
     tail, __ = os.path.splitext(tail)
-    this_path = os.path.join(head, tail+ext)
+    this_path = os.path.join(head, tail + ext)
     return this_path
 
 
@@ -60,7 +60,7 @@ def parse(path: str) -> dict:
 
     """
     __, ext = os.path.splitext(path)
-    if ext == '.sac' or '.SAC':
+    if ext == ".sac" or ".SAC":
         parsed = parse_sac(path)
     else:
         raise ValueError(f"Unrecognized file extension: {ext}")
@@ -90,33 +90,36 @@ def to_df(path: str) -> pd.DataFrame:
 
     """
     __, ext = os.path.splitext(path)
-    if ext != '.sac' and ext != '.SAC':
+    if ext != ".sac" and ext != ".SAC":
         raise ValueError(f"Unrecognized file extension: {ext}")
     sac = parse_sac(path)
-    cycles = sac['cycles']
+    cycles = sac["cycles"]
     first_cycle = cycles[0]
     # Determine the masses.
     masses = []
     for scan in first_cycle:
-        first_mass = scan['info']['first_mass']
-        scan_width = scan['info']['scan_width']
-        values_per_mass = scan['info']['values_per_mass']
+        first_mass = scan["info"]["first_mass"]
+        scan_width = scan["info"]["scan_width"]
+        values_per_mass = scan["info"]["values_per_mass"]
         scan_masses = np.linspace(
-            first_mass, first_mass+scan_width, scan_width*values_per_mass,
-            endpoint=False)
+            first_mass,
+            first_mass + scan_width,
+            scan_width * values_per_mass,
+            endpoint=False,
+        )
         masses += list(scan_masses)
     # Read the data from each scan.
     cycles_data = [None] * len(cycles)
     for n, cycle in enumerate(cycles):
         for scan in cycle:
             if cycles_data[n] is None:
-                cycles_data[n] = scan['datapoints']
+                cycles_data[n] = scan["datapoints"]
             else:
-                cycles_data[n] += scan['datapoints']
+                cycles_data[n] += scan["datapoints"]
     # Build the DataFrame.
     cycles_data = np.array(cycles_data).T
     data = np.c_[masses, cycles_data]
-    columns = ['mass'] + [f"cycle {n}" for n in range(1, len(cycles)+1)]
+    columns = ["mass"] + [f"cycle {n}" for n in range(1, len(cycles) + 1)]
     return pd.DataFrame(data=data, columns=columns)
 
 
@@ -135,8 +138,8 @@ def to_csv(path: str, csv_path: str = None) -> None:
     """
     df = to_df(path)
     if csv_path is None:
-        csv_path = _construct_path(path, '.csv')
-    df.to_csv(csv_path, float_format='%.10e', index=False)
+        csv_path = _construct_path(path, ".csv")
+    df.to_csv(csv_path, float_format="%.10e", index=False)
 
 
 def to_xlsx(path: str, xlsx_path: str = None) -> None:
@@ -154,6 +157,5 @@ def to_xlsx(path: str, xlsx_path: str = None) -> None:
     """
     df = to_df(path)
     if xlsx_path is None:
-        xlsx_path = _construct_path(path, '.xlsx')
-    # pylint: disable=abstract-class-instantiated
+        xlsx_path = _construct_path(path, ".xlsx")
     df.to_excel(xlsx_path, index=False, sheet_name="SCA Cycles")
