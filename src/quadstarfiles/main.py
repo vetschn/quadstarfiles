@@ -9,7 +9,6 @@ Date:           2021-11-02
 
 """
 import os
-from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -101,8 +100,14 @@ def to_df(path: str) -> pd.DataFrame:
             ).tolist()
             df = pd.DataFrame(
                 {
-                    scan["info"]["scan_title"]: mass,
-                    scan["info"]["data_title"]: scan["datapoints"],
+                    scan["info"]["scan_title"]
+                    + " ["
+                    + scan["info"]["scan_unit"]
+                    + "]": mass,
+                    scan["info"]["data_title"]
+                    + " ["
+                    + scan["info"]["data_unit"]
+                    + "]": scan["datapoints"],
                 }
             )
             scans.append(df)
