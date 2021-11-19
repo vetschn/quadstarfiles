@@ -19,9 +19,8 @@ Date:           2021-11-02
 from typing import Any
 
 import numpy as np
-from numpy.lib import recfunctions as rfn
 
-
+# The general header at the top of .sac files.
 general_header_dtype = np.dtype(
     [
         ("data_index", "<i2"),
@@ -34,7 +33,10 @@ general_header_dtype = np.dtype(
         ("measure_day", "|u1"),
         ("measure_month", "|u1"),
         ("measure_year", "|u1"),
-        ("author", "|S20"),
+        ("author", "|S86"),
+        ("n_cycles", "<i4"),
+        ("n_scans", "<i2"),
+        ("cycle_length", "<i4"),
     ]
 )
 
@@ -145,62 +147,39 @@ def parse_sac(path: str) -> dict:
     """
     with open(path, "rb") as sac_file:
         sac = sac_file.read()
-    # There is a peculiar timestamp at the top of the file.
-    general_header = _read_value(sac, 0, general_header_dtype)
-    n_cycles = _read_value(sac, 100, "<i4")
-    n_scans = _read_value(sac, 104, "<i2")
-    cycle_length = _read_value(sac, 106, "<i4")
-    scan_headers = _read_values(sac, 200, scan_header_dtype, n_scans)
-    header = general_header.update(
-        {"n_cycles": n_cycles, "n_scans": n_scans, "cycle_length": cycle_length,}
+    general_header = _read_value(sac, 0x0000, general_header_dtype)
+    uts_base_s = _read_value(sac, 0x00C2, "<u4")
+    uts_base_ms = _read_value(sac, 0x00C6, "<u2") * 1e-1
+    uts_base = uts_base_s + uts_base_ms * 1e-3
+    scan_headers = _read_values(
+        sac, 0x00C8, scan_header_dtype, general_header["n_scans"]
     )
-    # Iterate through cycles and scan blocks to get all the scan data in
-    # the present .sac file.
-    scans = []
-    cycles = [None] * n_cycles
-    for n in range(n_cycles):
-        for scan_header in scan_headers:
-            if scan_header["type"] != 0x11:
-                # Usually there is a 0x0F type scan at the start that
-                # does not contain any data.
+    cycles = []
+    for n in range(general_header["n_cycles"]):
+        cycle_offset = n * general_header["cycle_length"]
+        uts_offset_s = _read_value(sac, 0x00C2 + cycle_offset, "<u4")
+        uts_offset_ms = _read_value(sac, 0x00C6 + cycle_offset, "<u4") * 1e-1
+        uts_timestamp = uts_base + (uts_offset_s + uts_offset_ms * 1e-3)
+        scans = []
+        for header in scan_headers:
+            if header["type"] != 0x11:
                 continue
-            info_position = scan_header["info_position"]
-            scan_info = _read_value(sac, info_position, scan_info_dtype)
-            data_position = scan_header["data_position"] + n * cycle_length
-            n_datapoints = _read_value(sac, data_position, "<i4")
-            data_range = _read_value(sac, data_position + 4, "<i2")
-            # NOTE: Against all intuition, do not read (n_datapoints)
-            # values but read (scan_width*values_per_mass) values.
-            scan_width = scan_info["scan_width"]
-            values_per_mass = scan_info["values_per_mass"]
+            info = _read_value(sac, header["info_position"], scan_info_dtype)
+            cycle_data_position = header["data_position"] + cycle_offset
+            n_datapoints = _read_value(sac, cycle_data_position + 0x0000, "<i4")
+            data_range = _read_value(sac, cycle_data_position + 0x0004, "<i2")
+            actual_n_datapoints = info["scan_width"] * info["values_per_mass"]
             datapoints = _read_values(
-                sac, data_position + 6, "<f4", scan_width * values_per_mass
+                sac, cycle_data_position + 0x0006, "<f4", actual_n_datapoints
             )
             scan = {
-                "cycle": n,
-                "header": scan_header,
-                "info": scan_info,
+                "header": header,
+                "info": info,
                 "n_datapoints": n_datapoints,
                 "data_range": data_range,
                 "datapoints": datapoints,
             }
             scans.append(scan)
-            if cycles[n] is None:
-                cycles[n] = [scan]
-            else:
-                cycles[n] += [scan]
-    # Find the timestamp of each cycle.
-    # TODO: Do this in a nicer and faster way.
-    # Standard POSIX timestamp.
-    uts_base_s = _read_value(sac, 194, "<u4")
-    uts_base_ms = float(_read_value(sac, 198, "<u2")) * 1e-1
-    base_uts_offset_position = scans[0]["header"]["data_position"] - 6
-    for n in range(n_cycles):
-        uts_offset_position = base_uts_offset_position + n * cycle_length
-        uts_offset_s = _read_value(sac, uts_offset_position, "<u4")
-        uts_offset_ms = _read_value(sac, uts_offset_position + 4, "<u2") * 1e-1
-        for scan in cycles[n]:
-            scan["info"]["uts"] = (
-                uts_base_s + uts_offset_s + 1e-3 * (uts_base_ms + uts_offset_ms)
-            )
-    return {"header": header, "cycles": cycles, "scans": scans}
+        cycle = {"uts": uts_timestamp, "scans": scans}
+        cycles.append(cycle)
+    return {"header": general_header, "cycles": cycles}
