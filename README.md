@@ -64,11 +64,11 @@ Parse the file and write the data part into an Excel `.xlsx` file.
 0x0c "measure_month"
 0x0d "measure_year"
 0x0f "author"
-...
 0x64 "n_cycles"
 0x68 "n_scans"
 0x6a "cycle_length"
 ...
+# Not sure what sits from 0x6e to 0xc2.
 0xc2 "uts_base_s"
 0xc6 "uts_base_ms"
 # Scan header: read these 9 bytes n_scans times.
@@ -77,22 +77,22 @@ Parse the file and write the data part into an Excel `.xlsx` file.
 0xcd + (n * 0x09) "data_position"
 ...
 # Scan info: read these 137 bytes (n_scans where type == 0x11) times.
-info_position + (n * 0x89) + 0x00 "data_format"
-info_position + (n * 0x89) + 0x02 "data_title"
-info_position + (n * 0x89) + 0x0f "data_unit"
-info_position + (n * 0x89) + 0x1d "scan_title"
-info_position + (n * 0x89) + 0x2a "scan_unit"
-info_position + (n * 0x89) + 0x38 "comment"
-info_position + (n * 0x89) + 0x7a "first_mass"
-info_position + (n * 0x89) + 0x7e "scan_width"
-info_position + (n * 0x89) + 0x80 "values_per_mass"
-info_position + (n * 0x89) + 0x81 "zoom_start"
-info_position + (n * 0x89) + 0x85 "zoom_end"
+info_position + 0x00 "data_format"
+info_position + 0x02 "data_title"
+info_position + 0x0f "data_unit"
+info_position + 0x1d "scan_title"
+info_position + 0x2a "scan_unit"
+info_position + 0x38 "comment"
+info_position + 0x7a "first_mass"
+info_position + 0x7e "scan_width"
+info_position + 0x80 "values_per_mass"
+info_position + 0x81 "zoom_start"
+info_position + 0x85 "zoom_end"
 ...
 # UTS offset: read these 6 bytes for every cycle.
 0xc2 + (n * cycle_length) "uts_offset_s"
 0xc6 + (n * cycle_length) "uts_offset_ms"
-# Read everything below for every cycle. Each cycle contains a number of scans.
+# Read everything below for every cycle.
 # Datapoints info: read these 6 bytes (n_scans where type == 0x11) times.
 data_position + (n * cycle_length) + 0x00 "n_datapoints"
 data_position + (n * cycle_length) + 0x04 "data_range"
@@ -122,65 +122,36 @@ data_position + (n * cycle_length) + 0x06 "datapoints"
         'cycle_length',
     },
     'cycles': [
-        [
-            {
-                'cycle'
-                'header': {
-                    'type',
-                    'info_position',
-                    'data_position',
-                },
-                'info': {
-                    'data_format',
-                    'data_title',
-                    'data_unit',
-                    'scan_title',
-                    'scan_unit',
-                    'comment',
-                    'first_mass',
-                    'scan_width',
-                    'values_per_mass',
-                    'zoom_start',
-                    'zoom_end',
-                    'uts',
-                },
-                'n_datapoints',
-                'data_range',
-                'datapoints': []
-            },
-            {
-                ...
-            },
-        ],
-        [{
-            ...
-        }],
-    ],
-    'scans': [
         {
-            'cycle',
-            'header': {
-                'type',
-                'info_position',
-                'data_position',
-            },
-            'info': {
-                'data_format',
-                'data_title',
-                'data_unit',
-                'scan_title',
-                'scan_unit',
-                'comment',
-                'first_mass',
-                'scan_width',
-                'values_per_mass',
-                'zoom_start',
-                'zoom_end',
-                'uts',
-            },
-            'n_datapoints',
-            'data_range',
-            'datapoints': [],
+            'uts',
+            'scans': [
+                {
+                    'header': {
+                        'type',
+                        'info_position',
+                        'data_position',
+                    },
+                    'info': {
+                        'data_format',
+                        'data_title',
+                        'data_unit',
+                        'scan_title',
+                        'scan_unit',
+                        'comment',
+                        'first_mass',
+                        'scan_width',
+                        'values_per_mass',
+                        'zoom_start',
+                        'zoom_end',
+                    },
+                    'n_datapoints',
+                    'data_range',
+                    'datapoints': []
+                },
+                {
+                    ...
+                },
+            ],
         },
         {
             ...
