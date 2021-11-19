@@ -8,15 +8,117 @@ was a really useful stepping stone for this Python adaptation.
 Pretty much the entire file format has been reverse engineered. There
 are still one or two unknown fields.
 
-TODO: The parse_sac function could use some more thinking. This is a
-first, working solution.
+
+File Structure of `.sac` Files
+------------------------------
+0x00 "data_index"
+0x02 "software_id"
+0x06 "software_version_major"
+0x07 "software_version_minor"
+0x08 "measure_second"
+0x09 "measure_minute"
+0x0a "measure_hour"
+0x0b "measure_day"
+0x0c "measure_month"
+0x0d "measure_year"
+0x0f "author"
+0x64 "n_cycles"
+0x68 "n_scans"
+0x6a "cycle_length"
+...
+# Not sure what sits from 0x6e to 0xc2.
+...
+0xc2 "uts_base_s"
+0xc6 "uts_base_ms"
+# Scan header. Read these 9 bytes for every scan (n_scans).
+0xc8 + (n * 0x09) "type"
+0xc9 + (n * 0x09) "info_position"
+0xcd + (n * 0x09) "data_position"
+...
+# Scan info. Read these 137 bytes for every scan where type != 0x11.
+info_position + 0x00 "data_format"
+info_position + 0x02 "data_title"
+info_position + 0x0f "data_unit"
+info_position + 0x1d "scan_title"
+info_position + 0x2a "scan_unit"
+info_position + 0x38 "comment"
+info_position + 0x7a "first_mass"
+info_position + 0x7e "scan_width"
+info_position + 0x80 "values_per_mass"
+info_position + 0x81 "zoom_start"
+info_position + 0x85 "zoom_end"
+...
+# UTS offset. Read these 6 bytes for every cycle (n_cycles).
+0xc2 + (n * cycle_length) "uts_offset_s"
+0xc6 + (n * cycle_length) "uts_offset_ms"
+# Read everything remaining below for every cycle and every scan where type != 0x11.
+data_position + (n * cycle_length) + 0x00 "n_datapoints"
+data_position + (n * cycle_length) + 0x04 "data_range"
+# Datapoints. Read these 4 bytes (scan_width * values_per_mass) times.
+data_position + (n * cycle_length) + 0x06 "datapoints"
+...
+
+
+Structure of Parsed Data
+------------------------
+{
+    'header': {
+        'data_index',
+        'software_id',
+        'software_version_major',
+        'software_version_minor',
+        'measure_second',
+        'measure_minute',
+        'measure_hour',
+        'measure_day',
+        'measure_month',
+        'measure_year',
+        'author',
+        'n_cycles',
+        'n_scans',
+        'cycle_length',
+    },
+    'cycles': [
+        {
+            'uts',
+            'scans': [
+                {
+                    'header': {
+                        'type',
+                        'info_position',
+                        'data_position',
+                    },
+                    'info': {
+                        'data_format',
+                        'data_title',
+                        'data_unit',
+                        'scan_title',
+                        'scan_unit',
+                        'comment',
+                        'first_mass',
+                        'scan_width',
+                        'values_per_mass',
+                        'zoom_start',
+                        'zoom_end',
+                    },
+                    'n_datapoints',
+                    'data_range',
+                    'datapoints': []
+                },
+                {...},
+            ],
+        },
+        {...},
+    ],
+}
+
 
 Author:         Nicolas Vetsch (veni@empa.ch / vetschnicolas@gmail.com)
 Organisation:   EMPA Dübendorf, Materials for Energy Conversion (501)
 Date:           2021-11-02
 
 """
-from typing import Any
+from typing import Any, Union
 
 import numpy as np
 
@@ -98,7 +200,9 @@ def _read_value(
     return item.decode(encoding) if isinstance(item, bytes) else item
 
 
-def _read_values(data: bytes, offset: int, dtype, count) -> list:
+def _read_values(
+    data: bytes, offset: int, dtype: np.dtype, count: int
+) -> Union[list, list[dict]]:
     """Reads in multiple values from a buffer starting at offset.
 
     Just a handy wrapper for np.frombuffer() with count >= 1.
@@ -126,8 +230,8 @@ def _read_values(data: bytes, offset: int, dtype, count) -> list:
     values = np.frombuffer(data, offset=offset, dtype=dtype, count=count)
     if values.dtype.names:
         return [dict(zip(value.dtype.names, value.item())) for value in values]
-    # The ndarray.tolist() method converts python scalars to numpy
-    # scalars, hence not just list(values).
+    # The ndarray.tolist() method converts numpy scalars in ndarrays to
+    # built-in python scalars. Thus not just list(values).
     return values.tolist()
 
 
@@ -172,14 +276,14 @@ def parse_sac(path: str) -> dict:
             datapoints = _read_values(
                 sac, cycle_data_position + 0x0006, "<f4", actual_n_datapoints
             )
-            scan = {
-                "header": header,
-                "info": info,
-                "n_datapoints": n_datapoints,
-                "data_range": data_range,
-                "datapoints": datapoints,
-            }
-            scans.append(scan)
-        cycle = {"uts": uts_timestamp, "scans": scans}
-        cycles.append(cycle)
+            scans.append(
+                {
+                    "header": header,
+                    "info": info,
+                    "n_datapoints": n_datapoints,
+                    "data_range": data_range,
+                    "datapoints": datapoints,
+                }
+            )
+        cycles.append({"uts": uts_timestamp, "scans": scans})
     return {"header": general_header, "cycles": cycles}
