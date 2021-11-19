@@ -9,11 +9,12 @@ Date:           2021-11-02
 
 """
 import os
+from typing import Union
 
 import numpy as np
 import pandas as pd
 
-from .sac import parse_sac
+from quadstarfiles.sac import parse_sac
 
 
 def _construct_path(other_path: str, ext: str) -> str:
@@ -60,7 +61,7 @@ def parse(path: str) -> dict:
 
     """
     __, ext = os.path.splitext(path)
-    if ext == ".sac" or ".SAC":
+    if ext in {".sac", ".SAC"}:
         parsed = parse_sac(path)
     else:
         raise ValueError(f"Unrecognized file extension: {ext}")
@@ -69,10 +70,7 @@ def parse(path: str) -> dict:
 
 def to_df(path: str) -> pd.DataFrame:
     """Extracts the data from a Quadstar 32-bit analog data file and
-    returns it as Pandas DataFrame.
-
-    The function finds the file extension and tries to choose the
-    correct parser.
+    returns it as a list (cycles) of lists (scans) of Pandas DataFrames.
 
     Note
     ----
@@ -89,38 +87,28 @@ def to_df(path: str) -> pd.DataFrame:
         Data parsed from an .sac file.
 
     """
-    __, ext = os.path.splitext(path)
-    if ext != ".sac" and ext != ".SAC":
-        raise ValueError(f"Unrecognized file extension: {ext}")
-    sac = parse_sac(path)
-    cycles = sac["cycles"]
-    first_cycle = cycles[0]
-    # Determine the masses.
-    masses = []
-    for scan in first_cycle:
-        first_mass = scan["info"]["first_mass"]
-        scan_width = scan["info"]["scan_width"]
-        values_per_mass = scan["info"]["values_per_mass"]
-        scan_masses = np.linspace(
-            first_mass,
-            first_mass + scan_width,
-            scan_width * values_per_mass,
-            endpoint=False,
-        )
-        masses += list(scan_masses)
-    # Read the data from each scan.
-    cycles_data = [None] * len(cycles)
-    for n, cycle in enumerate(cycles):
-        for scan in cycle:
-            if cycles_data[n] is None:
-                cycles_data[n] = scan["datapoints"]
-            else:
-                cycles_data[n] += scan["datapoints"]
-    # Build the DataFrame.
-    cycles_data = np.array(cycles_data).T
-    data = np.c_[masses, cycles_data]
-    columns = ["mass"] + [f"cycle {n}" for n in range(1, len(cycles) + 1)]
-    return pd.DataFrame(data=data, columns=columns)
+    sac = parse(path)
+    # Read the data from each scan in each cycle.
+    cycles = []
+    for cycle in sac["cycles"]:
+        scans = []
+        for scan in cycle["scans"]:
+            mass = np.linspace(
+                scan["info"]["first_mass"],
+                scan["info"]["first_mass"] + scan["info"]["scan_width"],
+                scan["info"]["scan_width"] * scan["info"]["values_per_mass"],
+                endpoint=False,
+            ).tolist()
+            df = pd.DataFrame(
+                {
+                    scan["info"]["scan_title"]: mass,
+                    scan["info"]["data_title"]: scan["datapoints"],
+                }
+            )
+            scans.append(df)
+        cycles.append(pd.concat(scans, keys=range(len(scans)), names=["Scan"]))
+    df = pd.concat(cycles, keys=range(len(cycles)), names=["Cycle"], axis=1)
+    return df
 
 
 def to_csv(path: str, csv_path: str = None) -> None:
@@ -139,7 +127,7 @@ def to_csv(path: str, csv_path: str = None) -> None:
     df = to_df(path)
     if csv_path is None:
         csv_path = _construct_path(path, ".csv")
-    df.to_csv(csv_path, float_format="%.10e", index=False)
+    df.to_csv(csv_path, float_format="%.10e")
 
 
 def to_xlsx(path: str, xlsx_path: str = None) -> None:
@@ -158,4 +146,4 @@ def to_xlsx(path: str, xlsx_path: str = None) -> None:
     df = to_df(path)
     if xlsx_path is None:
         xlsx_path = _construct_path(path, ".xlsx")
-    df.to_excel(xlsx_path, index=False, sheet_name="SCA Cycles")
+    df.to_excel(xlsx_path)
