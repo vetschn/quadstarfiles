@@ -4,6 +4,8 @@ This little package parses and converts `.sac` files from Pfeiffer's Quadstar 32
 
 There is a quirk in Quadstar 32-bit's *Dispsav* utility: The program does not allow you to write multiple/all cycles stored in a `.sac` file as human-readable ASCII. Instead you have to select one cycle after the other. With this parser/converter you can export all the cycles stored in a `.sac` in one go.
 
+The [sac2dat.c](https://www.bubek.org/sac2dat.php) code from Dr. Moritz Bubek was a really useful stepping stone for this.
+
 ```bash
 > cd ./quadstarfiles
 > pip install .
