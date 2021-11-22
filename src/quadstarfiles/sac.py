@@ -262,7 +262,7 @@ def parse_sac(path: str) -> dict:
     for n in range(general_header["n_cycles"]):
         cycle_offset = n * general_header["cycle_length"]
         uts_offset_s = _read_value(sac, 0x00C2 + cycle_offset, "<u4")
-        uts_offset_ms = _read_value(sac, 0x00C6 + cycle_offset, "<u4") * 1e-1
+        uts_offset_ms = _read_value(sac, 0x00C6 + cycle_offset, "<u2") * 1e-1
         uts_timestamp = uts_base + (uts_offset_s + uts_offset_ms * 1e-3)
         scans = []
         for header in scan_headers:
