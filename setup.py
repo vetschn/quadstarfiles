@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-
-"""
-
 import setuptools
 
 setuptools.setup(
@@ -15,6 +11,9 @@ setuptools.setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     url="https://github.com/vetschn/quadstarfiles",
+    project_urls={
+        'Bug Tracker': "https://github.com/vetschn/eclabfiles/issues",
+    },
     classifiers=[
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
