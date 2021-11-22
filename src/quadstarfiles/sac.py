@@ -179,10 +179,13 @@ def _read_value(
     ----------
     data
         An object that exposes the buffer interface. Here always bytes.
+
     offset
         Start reading the buffer from this offset (in bytes).
+
     dtype
         Data-type to read in.
+
     encoding
         The encoding of the bytes to be converted.
 
@@ -214,10 +217,13 @@ def _read_values(
     ----------
     data
         An object that exposes the buffer interface. Here always bytes.
+
     offset
         Start reading the buffer from this offset (in bytes).
+
     dtype
         Data-type to read in.
+
     count
         Number of items to read. -1 means all data in the buffer.
 
@@ -233,6 +239,14 @@ def _read_values(
     # The ndarray.tolist() method converts numpy scalars in ndarrays to
     # built-in python scalars. Thus not just list(values).
     return values.tolist()
+
+
+def _find_first_data_position(scan_headers: list[dict]) -> int:
+    """Finds the data position of the first scan containing any data."""
+    for header in scan_headers:
+        if header["type"] != 0x11:
+            continue
+        return header["data_position"]
 
 
 def parse_sac(path: str) -> dict:
@@ -258,11 +272,17 @@ def parse_sac(path: str) -> dict:
     scan_headers = _read_values(
         sac, 0x00C8, scan_header_dtype, general_header["n_scans"]
     )
+    # Find the data position of the first data-containing cycle.
+    first_data_position = _find_first_data_position(scan_headers)
     cycles = []
     for n in range(general_header["n_cycles"]):
         cycle_offset = n * general_header["cycle_length"]
-        uts_offset_s = _read_value(sac, 0x00C2 + cycle_offset, "<u4")
-        uts_offset_ms = _read_value(sac, 0x00C6 + cycle_offset, "<u2") * 1e-1
+        uts_offset_s = _read_value(
+            sac, first_data_position - 0x0006 + cycle_offset, "<u4"
+        )
+        uts_offset_ms = (
+            _read_value(sac, first_data_position - 0x0002 + cycle_offset, "<u2") * 1e-1
+        )
         uts_timestamp = uts_base + (uts_offset_s + uts_offset_ms * 1e-3)
         scans = []
         for header in scan_headers:
