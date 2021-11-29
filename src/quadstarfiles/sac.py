@@ -272,7 +272,7 @@ def parse_sac(path: str) -> dict:
     scan_headers = _read_values(
         sac, 0x00C8, scan_header_dtype, general_header["n_scans"]
     )
-    # Find the data position of the first data-containing cycle.
+    # Find the data position of the first cycle containing data.
     first_data_position = _find_first_data_position(scan_headers)
     cycles = []
     for n in range(general_header["n_cycles"]):
