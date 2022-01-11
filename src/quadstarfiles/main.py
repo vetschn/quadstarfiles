@@ -3,152 +3,123 @@
 """Functions for converting Quadstar 32-bit analog data to DataFrame,
 .csv and .xlsx.
 
-Author:         Nicolas Vetsch (veni@empa.ch / vetschnicolas@gmail.com)
-Organisation:   EMPA Dübendorf, Materials for Energy Conversion (501)
-Date:           2021-11-02
+See the actual parser to get an idea of the data format used.
 
+.. codeauthor:: Nicolas Vetsch <vetschnicolas@gmail.com>
 """
 import os
 
-import numpy as np
 import pandas as pd
 
-from quadstarfiles.sac import parse_sac
+from quadstarfiles import sac
 
 
-def _construct_path(other_path: str, ext: str) -> str:
-    """Constructs a new file path from the given path and extension.
+def _construct_fn(other_fn: str, ext: str) -> str:
+    """Constructs a new file name from the given name and extension.
 
     Parameters
     ----------
-    other_path
+    other_fn
         The path to some file.
     ext
-        The new extension to add to the other_path.
+        The new extension to add to the other_fn.
 
     Returns
     -------
     str
-        A new filepath with the given extension.
+        A new file name with the given extension.
 
     """
-    head, tail = os.path.split(other_path)
+    head, tail = os.path.split(other_fn)
     tail, __ = os.path.splitext(tail)
-    this_path = os.path.join(head, tail + ext)
-    return this_path
+    this_fn = os.path.join(head, tail + ext)
+    return this_fn
 
 
-def parse(path: str) -> dict:
-    """Parses a Quadstar 32-bit analog data file.
-
-    The function finds the file extension and tries to choose the
-    correct parser.
-
-    Note
-    ----
-    Currently only the .sac file extension is implemented.
+def process(fn: str) -> tuple[list, dict]:
+    """Processes a Quadstar 32-bit analog file.
 
     Parameters
     ----------
-    path
-        The path to a Quadstar 32-bit analog data file (.sac).
+    fn
+        The path to a Quadstar 32-bit analog file.
 
     Returns
     -------
-    list or dict
-        The parsed file.
-
+    tuple[list, dict]
+        The processed file. A nested list containing cycles and scans in
+        each cycle and a dictionary containing metadata.
     """
-    __, ext = os.path.splitext(path)
+    __, ext = os.path.splitext(fn)
     if ext in {".sac", ".SAC"}:
-        parsed = parse_sac(path)
-    else:
-        raise ValueError(f"Unrecognized file extension: {ext}")
-    return parsed
+        return sac.process(fn)
+    raise ValueError(f"Unrecognized file extension: {ext}")
 
 
-def to_df(path: str) -> pd.DataFrame:
-    """Extracts the data from a Quadstar 32-bit analog data file and
-    returns it as a list (cycles) of lists (scans) of Pandas DataFrames.
-
-    Note
-    ----
-    Currently only the .sac file extension is implemented.
+def to_df(fn: str) -> pd.DataFrame:
+    """Extracts data from a Quadstar file and returns it as DataFrame.
+    
+    The DataFrame will have a hierarchical MultiIndex, top-level being
+    the cycle and second level being the scans in each cycle.
+    
+    The DataFrame.attrs will contain any metadata.
 
     Parameters
     ----------
-    path
-        The path to a Quadstar 32-bit analog data file (.sac).
+    fn
+        The path to a Quadstar 32-bit analog data file.
 
     Returns
     -------
     pd.DataFrame
-        Data parsed from an .sac file.
+        Data parsed from a .sac file.
 
     """
-    sac = parse(path)
-    # Read the data from each scan in each cycle.
-    cycles = []
-    for cycle in sac["cycles"]:
-        scans = []
-        for scan in cycle["scans"]:
-            mass = np.linspace(
-                scan["info"]["first_mass"],
-                scan["info"]["first_mass"] + scan["info"]["scan_width"],
-                scan["info"]["scan_width"] * scan["info"]["values_per_mass"],
-                endpoint=False,
-            ).tolist()
-            df = pd.DataFrame(
-                {
-                    scan["info"]["scan_title"]
-                    + " ["
-                    + scan["info"]["scan_unit"]
-                    + "]": mass,
-                    scan["info"]["data_title"]
-                    + " ["
-                    + scan["info"]["data_unit"]
-                    + "]": scan["datapoints"],
-                }
-            )
-            scans.append(df)
-        cycles.append(pd.concat(scans, keys=range(len(scans)), names=["Scan"]))
-    df = pd.concat(cycles, keys=range(len(cycles)), names=["Cycle"], axis=1)
+    cycles, meta = process(fn)
+    dfs_cycles = []
+    for scans in cycles:
+        dfs_scans = []
+        for scan in scans:
+            dfs_scans.append(pd.DataFrame.from_dict(scan))
+        dfs_cycles.append(
+            pd.concat(dfs_scans, keys=range(len(dfs_scans)), names=["Scan"])
+        )
+    df = pd.concat(dfs_cycles, keys=range(len(dfs_cycles)), names=["Cycle"], axis=1)
+    df.attrs = meta
     return df
 
 
-def to_csv(path: str, csv_path: str = None) -> None:
-    """Extracts the data from an .mpt/.mpr file or from the techniques
-    in an .mps file and writes it to a number of .csv files.
+def to_csv(fn: str, csv_fn: str = None) -> None:
+    """Extracts the data from an Quadstar file and writes it to csv.
 
     Parameters
     ----------
-    path
-        The path to a Quadstar 32-bit analog data file (.sac).
-    csv_path
-        Base path to use for the .csv files. Defaults to construct the
-        .csv filename from the mpt_path.
+    fn
+        The path to the EC-Lab file to read in.
+    csv_fn
+        Base path to use for the csv file. Defaults to generate the csv
+        file name from the input file name.
 
     """
-    df = to_df(path)
-    if csv_path is None:
-        csv_path = _construct_path(path, ".csv")
-    df.to_csv(csv_path, float_format="%.10e")
+    df = to_df(fn)
+    if csv_fn is None:
+        csv_fn = _construct_fn(fn, ".csv")
+    df.to_csv(csv_fn, float_format="%.10e")
 
 
-def to_xlsx(path: str, xlsx_path: str = None) -> None:
-    """Extracts the data from an .sac file and writes it to an Excel
-    file.
+def to_excel(fn: str, excel_fn: str = None) -> None:
+    """Extracts the data from an Quadstar file and writes it to Excel.
 
     Parameters
     ----------
-    path
-        The path to a Quadstar 32-bit analog data file (.sac).
-    xlsx_path (optional)
-        Path to the Excel file to write. Defaults to construct the
-        filename from the mpt_path.
+    fn
+        The path to the EC-Lab file to read in.
+    excel_fn
+        Path to the Excel file to write. Defaults to generate the xlsx
+        file name from the input file name.
 
     """
-    df = to_df(path)
-    if xlsx_path is None:
-        xlsx_path = _construct_path(path, ".xlsx")
-    df.to_excel(xlsx_path)
+    df = to_df(fn)
+    if excel_fn is None:
+        excel_fn = _construct_fn(fn, ".xlsx")
+    df.to_excel(excel_fn)
