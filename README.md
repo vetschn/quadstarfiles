@@ -6,6 +6,9 @@ There is a quirk in Quadstar 32-bit's *Dispsav* utility: The program does not al
 
 The [sac2dat.c](https://www.bubek.org/sac2dat.php) code from Dr. Moritz Bubek was a really useful stepping stone for this.
 
+## Installation
+Use [pip](https://pip.pypa.io/en/stable/) to install quadstarfiles.
+
 ```bash
 > cd ./quadstarfiles
 > pip install .
@@ -13,46 +16,57 @@ The [sac2dat.c](https://www.bubek.org/sac2dat.php) code from Dr. Moritz Bubek wa
 
 ## Example Usage
 
-### `parse`
-
-Parse the data as it is stored in the corresponding file. The method automatically determines filetype and tries to apply the respective parser.
-
-```python
->>> import quadstarfiles as qsf
->>> qsf.parse("./sac_files/airdemo.sac")
-```
-
-
-### `to_df`
-
-Parse the file and transform only the data part into a Pandas `DataFrame`.
+### `process`: Processing Into Dictionaries
+Process the data as it is stored in the corresponding file. The method
+automatically determines filetype and tries to apply the respective
+parser.
 
 ```python
->>> import quadstarfiles as qsf
->>> qsf.to_df("./sac_files/airdemo.sac")
+import quadstarfiles as qsf
+cycles, meta = qsf.process("./sac_files/airdemo.sac")
 ```
 
+See [Filetypes and Processed Data Structure](#filetypes-and-processed-data-structure)
+to learn how the returned data is structured.
 
-### `to_csv`
+### `to_df`: Processing Into Dataframe
+Processes the file and converts it into a [Pandas `DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html) with a [hierarchical index](https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#multiindex-advanced-indexing). The top-level
+index is the cycle number and the second index corresponds to scan
+number within each cycle.
 
-Parse the file and write the data part into a `.csv` file.
+The `pd.DataFrame.attrs` will contain all the processed metadata.
 
 ```python
->>> import quadstarfiles as qsf
->>> qsf.to_csv("./sac_files/airdemo.sac")
+import quadstarfiles as qsf
+df = qsf.to_df("./sac_files/airdemo.sac")
 ```
 
-
-### `to_xlsx`
-
-Parse the file and write the data part into an Excel `.xlsx` file.
+### `to_csv`: Converting to CSV
+Process the file and write the data part into a `.csv` file at the
+specified location.
 
 ```python
->>> import quadstarfiles as qsf
->>> qsf.to_xlsx("./sac_files/airdemo.sac")
+import quadstarfiles as qsf
+qsf.to_csv("./sac_files/airdemo.sac", csv_fn="./csv_files/airdemo.csv")
 ```
 
-## `.sac` File Structure
+The `csv_fn` parameter is optional. If left away, the method writes a
+`.csv` file into the same folder as the input file.
+
+### `to_excel`: Converting to Excel
+Process the file and write the data part into an Excel `.xlsx` file at
+the specified location.
+
+```python
+import quadstarfiles as qsf
+qsf.to_excel("./sac_files/airdemo.sac")
+```
+
+The `excel_fn` parameter is optional. If left away, the method writes
+a `.xlsx` file at the location of the input file.
+
+## Filetypes and Processed Data Structure.
+### `.sac` File Structure
 ```python
 # General header
 0x00 "data_index"
@@ -103,62 +117,69 @@ data_position + (n * cycle_length) + 0x06 "datapoints"
 ...
 ```
 
-## Data Format
+### Processed `.sac` Files
+```python
+cycles, meta = qsf.process("./sac_files/airdemo.sac")
+```
+
+The `cycles` returned from the `process` function are a nested list. The
+outer list corresponds to the cycles, the inner one to the scans in each
+cycle.
+
+```python
+[
+    [
+        {
+            "{{ scan_title }}": list[float],
+            "{{ data_title }}": list[float],
+        },
+        {
+            "{{ scan_title }}": list[float],
+            "{{ data_title }}": list[float],
+        },
+        ...
+    ],
+    ...
+]
+
+```
+
+The metadata dictionary is structured into a general header and
+information on the cycles/scans. The "cycles" entry maps directly onto
+the data.
+
+The `meta` processed from `.sac` files looks like this:
+
 
 ```python
 {
-    'header': {
-        'data_index',
-        'software_id',
-        'software_version_major',
-        'software_version_minor',
-        'measure_second',
-        'measure_minute',
-        'measure_hour',
-        'measure_day',
-        'measure_month',
-        'measure_year',
-        'author',
-        'n_cycles',
-        'n_scans',
-        'cycle_length',
+    "general": {
+        "software_id": str
+        "software_version": str
+        "measure_uts": float
+        "author": str
+        "n_cycles": int
+        "n_scans": int
     },
-    'cycles': [
-        {
-            'uts',
-            'scans': [
-                {
-                    'header': {
-                        'type',
-                        'info_position',
-                        'data_position',
-                    },
-                    'info': {
-                        'data_format',
-                        'data_title',
-                        'data_unit',
-                        'scan_title',
-                        'scan_unit',
-                        'comment',
-                        'first_mass',
-                        'scan_width',
-                        'values_per_mass',
-                        'zoom_start',
-                        'zoom_end',
-                    },
-                    'n_datapoints',
-                    'data_range',
-                    'datapoints': []
-                },
-                {
-                    ...
-                },
-            ],
-        },
-        {
-            ...
-        },
+    "cycles": [
+        [
+            {
+                "uts": float,
+                "comment": str,
+                "data_format": int,
+                "fsr": float,
+                "scan_unit": str
+                "data_unit": str,
+            },
+            {
+                "uts": float,
+                "comment": str,
+                "data_format": int,
+                "fsr": float,
+                "scan_unit": str
+                "data_unit": str,
+            },
+        ],
     ],
 }
-
 ```

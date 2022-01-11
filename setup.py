@@ -4,7 +4,7 @@ import setuptools
 
 setuptools.setup(
     name="quadstarfiles",
-    version="0.1.0",
+    version="0.2.0",
     author="Nicolas Vetsch",
     author_email="vetschnicolas@gmail.com",
     description="Parsing and converting .sac QMS files more efficiently than Quadstar 32-bit.",
