@@ -1,3 +1,9 @@
+### *NOTE*
+
+This parser is no longer being maintained. Consider using the `masstrace` parser built into [yadg](https://github.com/dgbowl/yadg) for an up to date version.
+
+---
+
 # quadstarfiles
 
 This little package parses and converts `.sac` files from Pfeiffer's Quadstar 32-bit (QMS 422 & QMS 400 Quadrupole Mass Spectrometers) into Pandas DataFrames, Excel files and CSV files.
